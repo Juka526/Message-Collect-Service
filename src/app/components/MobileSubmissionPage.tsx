@@ -205,7 +205,7 @@ export function MobileSubmissionPage({ onSubmit, viewSwitcher }: Props) {
             </div>
 
             {/* Form area */}
-            <div className="px-6 pb-6 md:flex-1 md:pb-72 md:overflow-y-auto">
+            <div className="flex-1 px-6 pb-44 overflow-y-auto md:pb-72">
               <div className="max-w-6xl mx-auto">
               {/* Group selector */}
               <div
@@ -316,10 +316,6 @@ export function MobileSubmissionPage({ onSubmit, viewSwitcher }: Props) {
                 )}
               </AnimatePresence>
 
-              <div className="md:hidden mb-6">
-                {submitActions}
-              </div>
-
               {/* Writing helpers */}
               <div className="mt-6 mb-2">
                 {/* Sentence starters */}
@@ -362,12 +358,12 @@ export function MobileSubmissionPage({ onSubmit, viewSwitcher }: Props) {
             </div>
             </div>
 
-            {/* Fixed bottom submit area for wider screens */}
+            {/* Fixed bottom submit area */}
             <div
-              className="hidden md:block fixed bottom-0 left-0 right-0 px-6 pb-10 pt-6 z-20"
+              className="fixed bottom-0 left-0 right-0 px-6 pb-4 pt-5 z-20 md:pb-10 md:pt-6"
               style={{
                 background:
-                  "linear-gradient(to top, rgba(253,249,243,0.96) 60%, transparent)",
+                  "linear-gradient(to top, rgba(253,249,243,0.96) 68%, transparent)",
               }}
             >
               {submitActions}
