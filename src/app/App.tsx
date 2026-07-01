@@ -1,0 +1,178 @@
+import { useState, useEffect, useCallback } from "react";
+import { MobileSubmissionPage } from "./components/MobileSubmissionPage";
+import { DisplayPage } from "./components/DisplayPage";
+import { projectId, publicAnonKey } from "/utils/supabase/info";
+
+export interface Message {
+  id: string;
+  group: string;
+  message: string;
+  createdAt: string;
+  isAnonymous: true;
+}
+
+type View = "mobile" | "display";
+type ViewSwitcherProps = {
+  view: View;
+  onChange: (view: View) => void;
+};
+
+const env = import.meta.env as Record<string, string | undefined>;
+const functionSlug = env.VITE_SUPABASE_FUNCTION_SLUG ?? "server";
+const SERVER =
+  env.VITE_SUPABASE_FUNCTION_URL ??
+  `https://${projectId}.supabase.co/functions/v1/${functionSlug}`;
+const AUTH = { Authorization: `Bearer ${publicAnonKey}` };
+
+export { SERVER, AUTH };
+
+function ViewSwitcher({ view, onChange }: ViewSwitcherProps) {
+  return (
+    <div
+      className="flex shrink-0 gap-1 rounded-full px-2 py-1.5 shadow-lg"
+      style={{
+        background: "rgba(30, 23, 15, 0.75)",
+        backdropFilter: "blur(10px)",
+        border: "1px solid rgba(255, 255, 255, 0.12)",
+      }}
+    >
+      <button
+        onClick={() => onChange("mobile")}
+        className="px-3 py-1 rounded-full text-xs whitespace-nowrap transition-all duration-200"
+        style={
+          view === "mobile"
+            ? { background: "#F4A261", color: "#fff" }
+            : { color: "#F5E6D0" }
+        }
+      >
+        ✎ 보내기
+      </button>
+      <button
+        onClick={() => onChange("display")}
+        className="px-3 py-1 rounded-full text-xs whitespace-nowrap transition-all duration-200"
+        style={
+          view === "display"
+            ? { background: "#F4A261", color: "#fff" }
+            : { color: "#F5E6D0" }
+        }
+      >
+        ◉ 보기
+      </button>
+    </div>
+  );
+}
+
+export default function App() {
+  const [view, setView] = useState<View>("mobile");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchMessages = useCallback(async () => {
+    try {
+      const res = await fetch(`${SERVER}/messages`, { headers: AUTH });
+      const data = await res.json();
+      if (Array.isArray(data.messages)) {
+        setMessages(data.messages);
+      }
+    } catch {
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchMessages();
+    const interval = setInterval(fetchMessages, 4000);
+    return () => clearInterval(interval);
+  }, [fetchMessages]);
+
+  const addMessage = async (group: string, message: string): Promise<void> => {
+    const newMessage: Message = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      group,
+      message,
+      createdAt: new Date().toISOString(),
+      isAnonymous: true,
+    };
+    // Optimistic update
+    setMessages((prev) => [...prev, newMessage]);
+    try {
+      const res = await fetch(`${SERVER}/messages`, {
+        method: "POST",
+        headers: { ...AUTH, "Content-Type": "application/json" },
+        body: JSON.stringify(newMessage),
+      });
+      if (!res.ok) {
+        // Revert optimistic update on failure
+        setMessages((prev) => prev.filter((m) => m.id !== newMessage.id));
+        throw new Error("Failed to save");
+      }
+    } catch (e) {
+      setMessages((prev) => prev.filter((m) => m.id !== newMessage.id));
+      throw e;
+    }
+  };
+
+  const resetMessages = async (adminPassword: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`${SERVER}/messages`, {
+        method: "DELETE",
+        headers: { ...AUTH, "X-Admin-Password": adminPassword },
+      });
+      if (res.ok) {
+        setMessages([]);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
+  const verifyAdmin = async (adminPassword: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`${SERVER}/admin/verify`, {
+        method: "POST",
+        headers: { ...AUTH, "X-Admin-Password": adminPassword },
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  };
+
+  const deleteMessage = async (id: string, adminPassword: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`${SERVER}/messages/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: { ...AUTH, "X-Admin-Password": adminPassword },
+      });
+      if (res.ok) {
+        setMessages((prev) => prev.filter((message) => message.id !== id));
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
+  const viewSwitcher = <ViewSwitcher view={view} onChange={setView} />;
+
+  return (
+    <div className="size-full" style={{ fontFamily: "'Noto Sans KR', sans-serif" }}>
+      {view === "mobile" ? (
+        <MobileSubmissionPage onSubmit={addMessage} viewSwitcher={viewSwitcher} />
+      ) : (
+        <DisplayPage
+          messages={messages}
+          loading={loading}
+          onVerifyAdmin={verifyAdmin}
+          onReset={resetMessages}
+          onDeleteMessage={deleteMessage}
+          viewSwitcher={viewSwitcher}
+        />
+      )}
+    </div>
+  );
+}
