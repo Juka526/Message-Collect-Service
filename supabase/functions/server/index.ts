@@ -12,12 +12,30 @@ const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+const allowedOriginPatterns = (Deno.env.get("ALLOWED_ORIGIN_PATTERNS") ?? "")
+  .split(",")
+  .map((pattern) => pattern.trim())
+  .filter(Boolean)
+  .map((pattern) => {
+    try {
+      return new RegExp(pattern);
+    } catch (e) {
+      console.log("Ignoring invalid ALLOWED_ORIGIN_PATTERNS entry:", pattern, e);
+      return null;
+    }
+  })
+  .filter((pattern): pattern is RegExp => Boolean(pattern));
+
+const isAllowedOrigin = (origin: string) =>
+  allowedOrigins.includes(origin) ||
+  allowedOriginPatterns.some((pattern) => pattern.test(origin));
+
 app.use(
   "/*",
   cors({
     origin: (origin) => {
       if (!origin) return "";
-      return allowedOrigins.includes(origin) ? origin : "";
+      return isAllowedOrigin(origin) ? origin : "";
     },
     allowHeaders: ["Content-Type", "Authorization", "X-Admin-Password"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
