@@ -61,6 +61,33 @@ export function MobileSubmissionPage({ onSubmit, viewSwitcher }: Props) {
     setError("");
   };
 
+  const submitActions = (
+    <div className="max-w-6xl mx-auto">
+      <motion.button
+        onClick={handleSubmit}
+        disabled={submitting}
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.97 }}
+        className="w-full py-4 rounded-2xl text-white shadow-lg"
+        style={{
+          background: "linear-gradient(135deg, #F4A261 0%, #E76F51 100%)",
+          boxShadow: "0 4px 20px rgba(231, 111, 81, 0.3)",
+          fontFamily: "'Noto Sans KR', sans-serif",
+          opacity: submitting ? 0.7 : 1,
+        }}
+      >
+        {submitting ? "보내는 중..." : "문자 보내기 ✉️"}
+      </motion.button>
+      <p
+        className="text-xs text-center mt-3 leading-relaxed px-4"
+        style={{ color: "#C8A88A" }}
+      >
+        작성한 문자는 익명으로 전체 화면에 표시될 수 있습니다.<br />
+        너무 개인적이거나 민감한 내용, 다른 사람의 이름은 적지 말아주세요.
+      </p>
+    </div>
+  );
+
   useEffect(() => {
     if (!showIntro || typeof window === "undefined") return;
 
@@ -178,7 +205,7 @@ export function MobileSubmissionPage({ onSubmit, viewSwitcher }: Props) {
             </div>
 
             {/* Form area */}
-            <div className="flex-1 px-6 pb-72 overflow-y-auto">
+            <div className="px-6 pb-6 md:flex-1 md:pb-72 md:overflow-y-auto">
               <div className="max-w-6xl mx-auto">
               {/* Group selector */}
               <div
@@ -244,7 +271,7 @@ export function MobileSubmissionPage({ onSubmit, viewSwitcher }: Props) {
                   boxShadow: "0 12px 32px rgba(93, 58, 30, 0.1), 0 1px 2px rgba(93, 58, 30, 0.07)",
                 }}
               >
-                <div className="relative">
+                <div>
                   <textarea
                     value={message}
                     onChange={(e) => {
@@ -252,8 +279,8 @@ export function MobileSubmissionPage({ onSubmit, viewSwitcher }: Props) {
                       setError("");
                     }}
                     placeholder="하나님, 지금 제 마음은요…"
-                    rows={5}
-                    className="w-full resize-none rounded-2xl px-4 py-3.5 text-sm leading-relaxed focus:outline-none"
+                    rows={6}
+                    className="w-full min-h-[170px] sm:min-h-[190px] resize-none rounded-2xl px-4 py-3.5 text-sm leading-relaxed focus:outline-none"
                     style={{
                       background: "#FFF9F5",
                       border: "1px solid rgba(244, 162, 97, 0.25)",
@@ -264,7 +291,7 @@ export function MobileSubmissionPage({ onSubmit, viewSwitcher }: Props) {
                     }}
                   />
                   <span
-                    className="absolute bottom-3 right-4 text-xs"
+                    className="mt-2 block text-right text-xs"
                     style={{
                       color: message.length >= MAX_LENGTH ? "#E76F51" : "#C8A88A",
                     }}
@@ -288,6 +315,10 @@ export function MobileSubmissionPage({ onSubmit, viewSwitcher }: Props) {
                   </motion.p>
                 )}
               </AnimatePresence>
+
+              <div className="md:hidden mb-6">
+                {submitActions}
+              </div>
 
               {/* Writing helpers */}
               <div className="mt-6 mb-2">
@@ -331,38 +362,15 @@ export function MobileSubmissionPage({ onSubmit, viewSwitcher }: Props) {
             </div>
             </div>
 
-            {/* Fixed bottom submit area */}
+            {/* Fixed bottom submit area for wider screens */}
             <div
-              className="fixed bottom-0 left-0 right-0 px-6 pb-10 pt-6 z-20"
+              className="hidden md:block fixed bottom-0 left-0 right-0 px-6 pb-10 pt-6 z-20"
               style={{
                 background:
                   "linear-gradient(to top, rgba(253,249,243,0.96) 60%, transparent)",
               }}
             >
-              <div className="max-w-6xl mx-auto">
-              <motion.button
-                onClick={handleSubmit}
-                disabled={submitting}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.97 }}
-                className="w-full py-4 rounded-2xl text-white shadow-lg"
-                style={{
-                  background: "linear-gradient(135deg, #F4A261 0%, #E76F51 100%)",
-                  boxShadow: "0 4px 20px rgba(231, 111, 81, 0.3)",
-                  fontFamily: "'Noto Sans KR', sans-serif",
-                  opacity: submitting ? 0.7 : 1,
-                }}
-              >
-                {submitting ? "보내는 중..." : "문자 보내기 ✉️"}
-              </motion.button>
-              <p
-                className="text-xs text-center mt-3 leading-relaxed px-4"
-                style={{ color: "#C8A88A" }}
-              >
-                작성한 문자는 익명으로 전체 화면에 표시될 수 있습니다.<br />
-                너무 개인적이거나 민감한 내용, 다른 사람의 이름은 적지 말아주세요.
-              </p>
-              </div>
+              {submitActions}
             </div>
           </motion.div>
         )}
