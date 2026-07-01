@@ -5,7 +5,9 @@ import { createClient } from "jsr:@supabase/supabase-js@2.49.8";
 
 const app = new Hono();
 
-app.use("*", logger(console.log));
+if (Deno.env.get("ENABLE_REQUEST_LOGS") === "true") {
+  app.use("*", logger(console.log));
+}
 
 const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ?? "")
   .split(",")

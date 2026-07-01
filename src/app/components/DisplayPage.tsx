@@ -944,19 +944,28 @@ export function DisplayPage({ messages, loading, onVerifyAdmin, onReset, onDelet
               </motion.button>
             </div>
 
-            <div className="absolute bottom-24 left-1/2 -translate-x-1/2 flex gap-1.5">
-              {messages.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setSpotlightIndex(i)}
-                  className="w-2 h-2 rounded-full transition-all duration-200"
+            <div
+              className="absolute bottom-24 left-1/2 -translate-x-1/2 flex min-w-44 flex-col items-center gap-2"
+              style={{ color: "#F5E6D0", fontFamily: "'Noto Sans KR', sans-serif" }}
+            >
+              <span className="text-xs" style={{ color: "#D8BFA2" }}>
+                {hasMessages ? `${currentSpotlightIndex + 1} / ${messages.length}` : "0 / 0"}
+              </span>
+              <div
+                className="h-1 w-full overflow-hidden rounded-full"
+                style={{ background: "rgba(255,255,255,0.18)" }}
+                aria-hidden="true"
+              >
+                <div
+                  className="h-full rounded-full transition-all duration-300"
                   style={{
-                    background: i === currentSpotlightIndex ? "#F4A261" : "rgba(255,255,255,0.2)",
-                    transform: i === currentSpotlightIndex ? "scale(1.4)" : "scale(1)",
+                    width: hasMessages
+                      ? `${((currentSpotlightIndex + 1) / messages.length) * 100}%`
+                      : "0%",
+                    background: "#F4A261",
                   }}
-                  aria-label={`${i + 1}번째 문자 보기`}
                 />
-              ))}
+              </div>
             </div>
           </motion.div>
         )}

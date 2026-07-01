@@ -24,8 +24,31 @@ const SERVER =
   envValue("VITE_SUPABASE_FUNCTION_URL") ??
   `https://${projectId}.supabase.co/functions/v1/${functionSlug}`;
 const AUTH = { Authorization: `Bearer ${publicAnonKey}` };
+const DISPLAY_POLL_INTERVAL_MS = 10000;
 
 export { SERVER, AUTH };
+
+function createMessageId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `msg_${crypto.randomUUID()}`;
+  }
+
+  return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function messagesAreEqual(a: Message[], b: Message[]) {
+  if (a.length !== b.length) return false;
+
+  return a.every((message, index) => {
+    const next = b[index];
+    return (
+      message.id === next.id &&
+      message.group === next.group &&
+      message.message === next.message &&
+      message.createdAt === next.createdAt
+    );
+  });
+}
 
 function ViewSwitcher({ view, onChange }: ViewSwitcherProps) {
   return (
@@ -73,7 +96,7 @@ export default function App() {
       const res = await fetch(`${SERVER}/messages`, { headers: AUTH });
       const data = await res.json();
       if (Array.isArray(data.messages)) {
-        setMessages(data.messages);
+        setMessages((prev) => (messagesAreEqual(prev, data.messages) ? prev : data.messages));
       }
     } catch {
     } finally {
@@ -82,14 +105,17 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (view !== "display") return;
+
+    setLoading(true);
     fetchMessages();
-    const interval = setInterval(fetchMessages, 4000);
+    const interval = setInterval(fetchMessages, DISPLAY_POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [fetchMessages]);
+  }, [fetchMessages, view]);
 
   const addMessage = async (group: string, message: string): Promise<void> => {
     const newMessage: Message = {
-      id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      id: createMessageId(),
       group,
       message,
       createdAt: new Date().toISOString(),
