@@ -18,9 +18,10 @@ type ViewSwitcherProps = {
 };
 
 const env = import.meta.env as Record<string, string | undefined>;
-const functionSlug = env.VITE_SUPABASE_FUNCTION_SLUG ?? "server";
+const envValue = (key: string) => env[key]?.trim();
+const functionSlug = envValue("VITE_SUPABASE_FUNCTION_SLUG") ?? "server";
 const SERVER =
-  env.VITE_SUPABASE_FUNCTION_URL ??
+  envValue("VITE_SUPABASE_FUNCTION_URL") ??
   `https://${projectId}.supabase.co/functions/v1/${functionSlug}`;
 const AUTH = { Authorization: `Bearer ${publicAnonKey}` };
 
