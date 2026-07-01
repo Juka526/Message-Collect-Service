@@ -1,11 +1,18 @@
+# Message Collect Service
 
-  # Create mobile submission screen
+Letters to God message board built with Vite, React, Supabase Edge Functions, and Supabase Postgres.
 
-  This is a code bundle for Create mobile submission screen. The original project is available at https://www.figma.com/design/4GOUSUHURxjsbhi5zWjngJ/Create-mobile-submission-screen.
+## Running locally
 
-  ## Running the code
+```bash
+npm install
+npm run dev
+```
 
-  Run `npm i` to install the dependencies.
+Copy `.env.example` to `.env` and fill in the Supabase values before running against Supabase.
 
-  Run `npm run dev` to start the development server.
-  
+## Production build
+
+```bash
+npm run build
+```
