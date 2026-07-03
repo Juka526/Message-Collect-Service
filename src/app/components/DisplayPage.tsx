@@ -16,6 +16,7 @@ const NOTE_HEIGHT_RATIO = 1307 / 736;
 const CONTENT_PADDING = 320;
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
+const DRAG_THRESHOLD = 3;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -132,8 +133,31 @@ export function DisplayPage({ messages, loading, onVerifyAdmin, onReset, onDelet
 
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
+  const latestOffsetRef = useRef(offset);
+  const latestZoomRef = useRef(zoom);
+  const touchStartRef = useRef({
+    mode: "none" as "none" | "pan" | "pinch",
+    x: 0,
+    y: 0,
+    ox: 0,
+    oy: 0,
+    distance: 0,
+    zoom: 1,
+    offsetX: 0,
+    offsetY: 0,
+    centerX: 0,
+    centerY: 0,
+  });
   const containerRef = useRef<HTMLDivElement>(null);
   const hasDraggedRef = useRef(false);
+
+  useEffect(() => {
+    latestOffsetRef.current = offset;
+  }, [offset]);
+
+  useEffect(() => {
+    latestZoomRef.current = zoom;
+  }, [zoom]);
 
   const layouts = useMemo(
     () => messages.map((msg, i) => ({
@@ -227,7 +251,9 @@ export function DisplayPage({ messages, loading, onVerifyAdmin, onReset, onDelet
     if (!isDraggingRef.current) return;
     const dx = e.clientX - dragStartRef.current.x;
     const dy = e.clientY - dragStartRef.current.y;
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasDraggedRef.current = true;
+    if (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD) {
+      hasDraggedRef.current = true;
+    }
     setOffset(constrainOffset({ x: dragStartRef.current.ox + dx, y: dragStartRef.current.oy + dy }));
   }, [constrainOffset]);
 
@@ -287,6 +313,152 @@ export function DisplayPage({ messages, loading, onVerifyAdmin, onReset, onDelet
 
     container.addEventListener("wheel", handleWheel, { passive: false });
     return () => container.removeEventListener("wheel", handleWheel);
+  }, [constrainOffset]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const getTouchPoint = (touch: Touch) => {
+      const rect = container.getBoundingClientRect();
+      return {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top,
+      };
+    };
+
+    const getTouchDistance = (touches: TouchList) => {
+      const first = getTouchPoint(touches[0]);
+      const second = getTouchPoint(touches[1]);
+      return Math.hypot(second.x - first.x, second.y - first.y);
+    };
+
+    const getTouchCenter = (touches: TouchList) => {
+      const first = getTouchPoint(touches[0]);
+      const second = getTouchPoint(touches[1]);
+      return {
+        x: (first.x + second.x) / 2,
+        y: (first.y + second.y) / 2,
+      };
+    };
+
+    const handleTouchStart = (e: TouchEvent) => {
+      const currentOffset = latestOffsetRef.current;
+      const currentZoom = latestZoomRef.current;
+
+      if (e.touches.length === 1) {
+        const point = getTouchPoint(e.touches[0]);
+        touchStartRef.current = {
+          mode: "pan",
+          x: point.x,
+          y: point.y,
+          ox: currentOffset.x,
+          oy: currentOffset.y,
+          distance: 0,
+          zoom: currentZoom,
+          offsetX: currentOffset.x,
+          offsetY: currentOffset.y,
+          centerX: point.x,
+          centerY: point.y,
+        };
+        hasDraggedRef.current = false;
+        return;
+      }
+
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const center = getTouchCenter(e.touches);
+        touchStartRef.current = {
+          mode: "pinch",
+          x: 0,
+          y: 0,
+          ox: currentOffset.x,
+          oy: currentOffset.y,
+          distance: getTouchDistance(e.touches),
+          zoom: currentZoom,
+          offsetX: currentOffset.x,
+          offsetY: currentOffset.y,
+          centerX: center.x,
+          centerY: center.y,
+        };
+        hasDraggedRef.current = true;
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (touchStartRef.current.mode === "none") return;
+      e.preventDefault();
+
+      if (touchStartRef.current.mode === "pan" && e.touches.length === 1) {
+        const point = getTouchPoint(e.touches[0]);
+        const dx = point.x - touchStartRef.current.x;
+        const dy = point.y - touchStartRef.current.y;
+        if (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD) {
+          hasDraggedRef.current = true;
+        }
+        setOffset(constrainOffset({
+          x: touchStartRef.current.ox + dx,
+          y: touchStartRef.current.oy + dy,
+        }));
+        return;
+      }
+
+      if (e.touches.length === 2) {
+        const start = touchStartRef.current;
+        const currentDistance = getTouchDistance(e.touches);
+        if (!start.distance) return;
+
+        const center = getTouchCenter(e.touches);
+        const nextZoom = clamp(start.zoom * (currentDistance / start.distance), MIN_ZOOM, MAX_ZOOM);
+        const worldX = (start.centerX - start.offsetX) / start.zoom;
+        const worldY = (start.centerY - start.offsetY) / start.zoom;
+
+        hasDraggedRef.current = true;
+        setZoom(nextZoom);
+        setOffset(constrainOffset({
+          x: center.x - worldX * nextZoom,
+          y: center.y - worldY * nextZoom,
+        }, nextZoom));
+      }
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length === 0) {
+        touchStartRef.current.mode = "none";
+        return;
+      }
+
+      if (e.touches.length === 1) {
+        const point = getTouchPoint(e.touches[0]);
+        const currentOffset = latestOffsetRef.current;
+        const currentZoom = latestZoomRef.current;
+        touchStartRef.current = {
+          mode: "pan",
+          x: point.x,
+          y: point.y,
+          ox: currentOffset.x,
+          oy: currentOffset.y,
+          distance: 0,
+          zoom: currentZoom,
+          offsetX: currentOffset.x,
+          offsetY: currentOffset.y,
+          centerX: point.x,
+          centerY: point.y,
+        };
+      }
+    };
+
+    container.addEventListener("touchstart", handleTouchStart, { passive: false });
+    container.addEventListener("touchmove", handleTouchMove, { passive: false });
+    container.addEventListener("touchend", handleTouchEnd);
+    container.addEventListener("touchcancel", handleTouchEnd);
+
+    return () => {
+      container.removeEventListener("touchstart", handleTouchStart);
+      container.removeEventListener("touchmove", handleTouchMove);
+      container.removeEventListener("touchend", handleTouchEnd);
+      container.removeEventListener("touchcancel", handleTouchEnd);
+    };
   }, [constrainOffset]);
 
   useEffect(() => {
