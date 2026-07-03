@@ -22,15 +22,38 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+function estimateVisualLines(message: string, charsPerLine: number) {
+  const normalized = message.replace(/\r\n/g, "\n");
+  return normalized.split("\n").reduce((total, line) => {
+    const trimmedLength = line.trim().length;
+    if (trimmedLength === 0) return total + 1;
+    return total + Math.max(1, Math.ceil(trimmedLength / charsPerLine));
+  }, 0);
+}
+
 function getNoteSize(message: string) {
   const length = message.trim().length;
+  const explicitLineCount = message.replace(/\r\n/g, "\n").split("\n").length;
 
   if (length < 20) {
     return { width: 250, fontSize: 21, lineHeight: 1.55 };
   }
 
   if (length < 80) {
-    return { width: 315, fontSize: 19, lineHeight: 1.55 };
+    const estimatedLines = estimateVisualLines(message, 15);
+    return estimatedLines > 7 || explicitLineCount > 4
+      ? { width: 350, fontSize: 17.5, lineHeight: 1.42 }
+      : { width: 315, fontSize: 19, lineHeight: 1.55 };
+  }
+
+  const estimatedLines = estimateVisualLines(message, 21);
+
+  if (estimatedLines > 17 || explicitLineCount > 8) {
+    return { width: 470, fontSize: 14.5, lineHeight: 1.3 };
+  }
+
+  if (estimatedLines > 13 || explicitLineCount > 6) {
+    return { width: 430, fontSize: 15.5, lineHeight: 1.36 };
   }
 
   return { width: 390, fontSize: 17, lineHeight: 1.5 };
