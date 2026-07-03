@@ -63,7 +63,7 @@ function getNoteSize(message: string) {
 function getSpotlightNoteSize(message: string, availableWidth: number, availableHeight: number) {
   const length = message.trim().length;
   const explicitLineCount = message.replace(/\r\n/g, "\n").split("\n").length;
-  const width = Math.min(560, availableWidth);
+  const width = Math.min(640, availableWidth);
 
   const pickSize = (fontSize: number, lineHeight: number, charsPerLine: number, preferredHeight: number) => {
     const estimatedLines = Math.max(estimateVisualLines(message, charsPerLine), explicitLineCount);
@@ -80,27 +80,27 @@ function getSpotlightNoteSize(message: string, availableWidth: number, available
 
   if (length < 20) {
     return {
-      width: Math.min(390, availableWidth),
-      height: Math.min(690, availableHeight),
-      fontSize: 30,
+      width: Math.min(470, availableWidth),
+      height: Math.min(835, availableHeight),
+      fontSize: 36,
       lineHeight: 1.55,
     };
   }
 
   if (length < 80) {
     return pickSize(
-      explicitLineCount > 4 ? 24 : 27,
+      explicitLineCount > 4 ? 28 : 31,
       explicitLineCount > 4 ? 1.42 : 1.55,
-      16,
-      760,
+      18,
+      880,
     );
   }
 
   if (length < 180) {
-    return pickSize(explicitLineCount > 7 ? 18.5 : 21, explicitLineCount > 7 ? 1.34 : 1.45, 30, 860);
+    return pickSize(explicitLineCount > 7 ? 21 : 24, explicitLineCount > 7 ? 1.34 : 1.45, 34, 940);
   }
 
-  return pickSize(length > 260 || explicitLineCount > 10 ? 15.5 : 18, 1.34, 34, 900);
+  return pickSize(length > 260 || explicitLineCount > 10 ? 17 : 20, 1.34, 38, 980);
 }
 
 function seededRand(seed: number): number {
