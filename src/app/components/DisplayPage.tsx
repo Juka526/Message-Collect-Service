@@ -17,6 +17,7 @@ const CONTENT_PADDING = 320;
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
 const DRAG_THRESHOLD = 3;
+const SPOTLIGHT_AUTO_PLAY_MS = 6000;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -61,7 +62,21 @@ function getNoteSize(message: string) {
 
 function getSpotlightNoteSize(message: string, availableWidth: number, availableHeight: number) {
   const length = message.trim().length;
-  const width = Math.min(540, availableWidth);
+  const explicitLineCount = message.replace(/\r\n/g, "\n").split("\n").length;
+  const width = Math.min(560, availableWidth);
+
+  const pickSize = (fontSize: number, lineHeight: number, charsPerLine: number, preferredHeight: number) => {
+    const estimatedLines = Math.max(estimateVisualLines(message, charsPerLine), explicitLineCount);
+    const textHeight = estimatedLines * fontSize * lineHeight;
+    const requiredHeight = Math.ceil((textHeight + fontSize * 3.5) / 0.54);
+
+    return {
+      width,
+      height: Math.max(Math.min(preferredHeight, availableHeight), requiredHeight),
+      fontSize,
+      lineHeight,
+    };
+  };
 
   if (length < 20) {
     return {
@@ -73,29 +88,19 @@ function getSpotlightNoteSize(message: string, availableWidth: number, available
   }
 
   if (length < 80) {
-    return {
-      width: Math.min(470, availableWidth),
-      height: Math.min(835, availableHeight),
-      fontSize: 27,
-      lineHeight: 1.55,
-    };
+    return pickSize(
+      explicitLineCount > 4 ? 24 : 27,
+      explicitLineCount > 4 ? 1.42 : 1.55,
+      16,
+      760,
+    );
   }
 
   if (length < 180) {
-    return {
-      width,
-      height: availableHeight,
-      fontSize: 21,
-      lineHeight: 1.45,
-    };
+    return pickSize(explicitLineCount > 7 ? 18.5 : 21, explicitLineCount > 7 ? 1.34 : 1.45, 30, 860);
   }
 
-  return {
-    width,
-    height: availableHeight,
-    fontSize: length > 260 ? 16 : 18,
-    lineHeight: 1.42,
-  };
+  return pickSize(length > 260 || explicitLineCount > 10 ? 15.5 : 18, 1.34, 34, 900);
 }
 
 function seededRand(seed: number): number {
@@ -140,6 +145,8 @@ export function DisplayPage({ messages, loading, onVerifyAdmin, onReset, onDelet
   const [zoom, setZoom] = useState(1);
   const [spotlightMode, setSpotlightMode] = useState(false);
   const [spotlightIndex, setSpotlightIndex] = useState(0);
+  const [spotlightAutoPlay, setSpotlightAutoPlay] = useState(false);
+  const [spotlightAutoPlayCycle, setSpotlightAutoPlayCycle] = useState(0);
 
   // Admin panel state
   const [adminOpen, setAdminOpen] = useState(false);
@@ -518,6 +525,7 @@ export function DisplayPage({ messages, loading, onVerifyAdmin, onReset, onDelet
   useEffect(() => {
     if (!spotlightMode) return;
     if (!hasMessages) {
+      setSpotlightAutoPlay(false);
       setSpotlightIndex(0);
       return;
     }
@@ -526,19 +534,48 @@ export function DisplayPage({ messages, loading, onVerifyAdmin, onReset, onDelet
     }
   }, [currentSpotlightIndex, hasMessages, spotlightIndex, spotlightMode]);
 
+  useEffect(() => {
+    if (!spotlightMode) {
+      setSpotlightAutoPlay(false);
+      return;
+    }
+
+    if (!spotlightAutoPlay || !hasMessages) return;
+
+    const timer = window.setTimeout(() => {
+      setSpotlightIndex((prev) => (prev + 1) % messages.length);
+      setSpotlightAutoPlayCycle((prev) => prev + 1);
+    }, SPOTLIGHT_AUTO_PLAY_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [currentSpotlightIndex, hasMessages, messages.length, spotlightAutoPlay, spotlightMode, spotlightAutoPlayCycle]);
+
+  const pauseSpotlightAutoPlay = () => {
+    setSpotlightAutoPlay(false);
+    setSpotlightAutoPlayCycle((prev) => prev + 1);
+  };
+
   const prevSpotlight = () => {
     if (!hasMessages) return;
+    pauseSpotlightAutoPlay();
     setSpotlightIndex((prev) => (prev - 1 + messages.length) % messages.length);
   };
 
   const nextSpotlight = () => {
     if (!hasMessages) return;
+    pauseSpotlightAutoPlay();
     setSpotlightIndex((prev) => (prev + 1) % messages.length);
   };
 
   const enterSpotlight = (index: number) => {
+    pauseSpotlightAutoPlay();
     setSpotlightIndex(index);
     setSpotlightMode(true);
+  };
+
+  const exitSpotlight = () => {
+    pauseSpotlightAutoPlay();
+    setSpotlightMode(false);
   };
 
   const handleAdminLogin = async () => {
@@ -1011,7 +1048,7 @@ export function DisplayPage({ messages, loading, onVerifyAdmin, onReset, onDelet
             style={{ background: "rgba(20, 14, 8, 0.88)", backdropFilter: "blur(6px)" }}
           >
             <motion.button
-              onClick={() => setSpotlightMode(false)}
+              onClick={exitSpotlight}
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
               className="absolute top-5 right-5 px-5 py-2.5 rounded-full text-sm"
@@ -1104,7 +1141,7 @@ export function DisplayPage({ messages, loading, onVerifyAdmin, onReset, onDelet
               </div>
             </div>
 
-            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-3">
+            <div className="absolute bottom-8 left-1/2 flex -translate-x-1/2 flex-wrap items-center justify-center gap-3 px-5">
               <motion.button
                 onClick={prevSpotlight}
                 disabled={!hasMessages}
@@ -1137,6 +1174,28 @@ export function DisplayPage({ messages, loading, onVerifyAdmin, onReset, onDelet
               >
                 다음 문자 →
               </motion.button>
+              <motion.button
+                onClick={() => {
+                  if (!hasMessages) return;
+                  setSpotlightAutoPlay((prev) => !prev);
+                  setSpotlightAutoPlayCycle((prev) => prev + 1);
+                }}
+                disabled={!hasMessages}
+                whileHover={hasMessages ? { scale: 1.04 } : {}}
+                whileTap={hasMessages ? { scale: 0.96 } : {}}
+                className="px-5 py-3 rounded-full text-sm"
+                style={{
+                  background: spotlightAutoPlay ? "rgba(244, 162, 97, 0.18)" : "rgba(255, 255, 255, 0.08)",
+                  color: spotlightAutoPlay ? "#F4A261" : "#F5E6D0",
+                  border: spotlightAutoPlay
+                    ? "1px solid rgba(244, 162, 97, 0.58)"
+                    : "1px solid rgba(255, 255, 255, 0.2)",
+                  opacity: hasMessages ? 1 : 0.45,
+                  fontFamily: "'Noto Sans KR', sans-serif",
+                }}
+              >
+                자동 재생 {spotlightAutoPlay ? "켜짐" : "꺼짐"}
+              </motion.button>
             </div>
 
             <div
@@ -1161,6 +1220,22 @@ export function DisplayPage({ messages, loading, onVerifyAdmin, onReset, onDelet
                   }}
                 />
               </div>
+              {spotlightAutoPlay && hasMessages && (
+                <div
+                  className="h-1 w-full overflow-hidden rounded-full"
+                  style={{ background: "rgba(244, 162, 97, 0.14)" }}
+                  aria-hidden="true"
+                >
+                  <motion.div
+                    key={`${currentSpotlightIndex}-${spotlightAutoPlayCycle}`}
+                    className="h-full rounded-full"
+                    initial={{ width: "0%" }}
+                    animate={{ width: "100%" }}
+                    transition={{ duration: SPOTLIGHT_AUTO_PLAY_MS / 1000, ease: "linear" }}
+                    style={{ background: "rgba(244, 162, 97, 0.78)" }}
+                  />
+                </div>
+              )}
             </div>
           </motion.div>
         )}
