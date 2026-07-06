@@ -418,9 +418,11 @@ export function MobileSubmissionPage({ onSubmit, viewSwitcher }: Props) {
                 color: "#5A3922",
                 fontFamily: "'KyoboHandwriting2025', 'Noto Sans KR', sans-serif",
                 textShadow: "0 1px 12px rgba(255,255,255,0.72)",
+                textWrap: "pretty",
               }}
             >
-              오늘 나눔을 통해 하나님께 드리고 싶은 마음을 문자로 남겨주세요. 오늘 마음에 남은 질문이든, 다시 붙잡고 싶은 마음이든, 내려놓고 싶은 부담이나 두려움이든, 복음 안에서 기억하고 싶은 정체성이든 떠오르는 대로 편하게 적어주세요.
+              오늘 나눔을 통해 하나님께 드리고 싶은 마음을 문자로 남겨주세요. 오늘 마음에 남은 질문이든, 다시 붙잡고 싶은 마음이든, 내려놓고 싶은 부담이나 두려움이든, 복음 안에서 기억하고 싶은 정체성이든 떠오르는 대로{" "}
+              <span className="whitespace-nowrap">편하게 적어주세요.</span>
             </motion.p>
           </motion.div>
         )}

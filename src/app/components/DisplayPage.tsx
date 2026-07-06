@@ -18,6 +18,15 @@ const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
 const DRAG_THRESHOLD = 3;
 const SPOTLIGHT_AUTO_PLAY_MS = 6000;
+const SPOTLIGHT_TOP_OFFSET = 72;
+const SPOTLIGHT_BOTTOM_OFFSET = 132;
+const SPOTLIGHT_VERTICAL_GUTTER = 20;
+const SPOTLIGHT_HORIZONTAL_PADDING = 48;
+const SPOTLIGHT_TEXT_WIDTH_RATIO = 1 - 0.21 - 0.15;
+const SPOTLIGHT_TEXT_HEIGHT_RATIO = 1 - 0.34 - 0.12;
+const SPOTLIGHT_MIN_FONT_SIZE = 12;
+
+let measureContext: CanvasRenderingContext2D | null = null;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -30,6 +39,89 @@ function estimateVisualLines(message: string, charsPerLine: number) {
     if (trimmedLength === 0) return total + 1;
     return total + Math.max(1, Math.ceil(trimmedLength / charsPerLine));
   }, 0);
+}
+
+function getTextMeasureContext() {
+  if (typeof document === "undefined") return null;
+  if (measureContext) return measureContext;
+  const canvas = document.createElement("canvas");
+  measureContext = canvas.getContext("2d");
+  return measureContext;
+}
+
+function estimateWrappedLines(message: string, textWidth: number, fontSize: number) {
+  const normalized = message.replace(/\r\n/g, "\n");
+  const context = getTextMeasureContext();
+
+  if (!context || textWidth <= 0) {
+    return estimateVisualLines(message, Math.max(1, Math.floor(textWidth / (fontSize * 0.58))));
+  }
+
+  context.font = `${fontSize}px "KyoboHandwriting2025", "Noto Sans KR", sans-serif`;
+
+  return normalized.split("\n").reduce((total, rawLine) => {
+    if (rawLine.trim().length === 0) return total + 1;
+
+    let lineCount = 1;
+    let currentLineWidth = 0;
+
+    for (const character of Array.from(rawLine)) {
+      const characterWidth = context.measureText(character).width || fontSize * 0.58;
+
+      if (currentLineWidth > 0 && currentLineWidth + characterWidth > textWidth) {
+        lineCount += 1;
+        currentLineWidth = characterWidth;
+      } else {
+        currentLineWidth += characterWidth;
+      }
+    }
+
+    return total + lineCount;
+  }, 0);
+}
+
+function readSafeAreaInsets() {
+  if (typeof document === "undefined" || !document.body) {
+    return { top: 0, right: 0, bottom: 0, left: 0 };
+  }
+
+  const probe = document.createElement("div");
+  probe.style.position = "fixed";
+  probe.style.visibility = "hidden";
+  probe.style.pointerEvents = "none";
+  probe.style.paddingTop = "env(safe-area-inset-top)";
+  probe.style.paddingRight = "env(safe-area-inset-right)";
+  probe.style.paddingBottom = "env(safe-area-inset-bottom)";
+  probe.style.paddingLeft = "env(safe-area-inset-left)";
+  document.body.appendChild(probe);
+
+  const styles = window.getComputedStyle(probe);
+  const insets = {
+    top: parseFloat(styles.paddingTop) || 0,
+    right: parseFloat(styles.paddingRight) || 0,
+    bottom: parseFloat(styles.paddingBottom) || 0,
+    left: parseFloat(styles.paddingLeft) || 0,
+  };
+
+  document.body.removeChild(probe);
+  return insets;
+}
+
+function getViewportMetrics() {
+  if (typeof window === "undefined") {
+    return {
+      width: 1024,
+      height: 768,
+      safeArea: { top: 0, right: 0, bottom: 0, left: 0 },
+    };
+  }
+
+  const visualViewport = window.visualViewport;
+  return {
+    width: visualViewport?.width ?? window.innerWidth,
+    height: visualViewport?.height ?? window.innerHeight,
+    safeArea: readSafeAreaInsets(),
+  };
 }
 
 function getNoteSize(message: string) {
@@ -64,15 +156,26 @@ function getSpotlightNoteSize(message: string, availableWidth: number, available
   const length = message.trim().length;
   const explicitLineCount = message.replace(/\r\n/g, "\n").split("\n").length;
   const width = Math.min(640, availableWidth);
+  const textWidth = width * SPOTLIGHT_TEXT_WIDTH_RATIO;
 
-  const pickSize = (fontSize: number, lineHeight: number, charsPerLine: number, preferredHeight: number) => {
-    const estimatedLines = Math.max(estimateVisualLines(message, charsPerLine), explicitLineCount);
-    const textHeight = estimatedLines * fontSize * lineHeight;
-    const requiredHeight = Math.ceil((textHeight + fontSize * 3.5) / 0.54);
+  const pickSize = (baseFontSize: number, lineHeight: number, preferredHeight: number) => {
+    let fontSize = baseFontSize;
+    let estimatedLines = 1;
+    let requiredHeight = preferredHeight;
+
+    while (fontSize >= SPOTLIGHT_MIN_FONT_SIZE) {
+      estimatedLines = Math.max(estimateWrappedLines(message, textWidth, fontSize), explicitLineCount);
+      const textHeight = estimatedLines * fontSize * lineHeight;
+      requiredHeight = Math.ceil((textHeight + fontSize * 3.5) / SPOTLIGHT_TEXT_HEIGHT_RATIO);
+
+      if (requiredHeight <= availableHeight) break;
+      if (fontSize === SPOTLIGHT_MIN_FONT_SIZE) break;
+      fontSize = Math.max(SPOTLIGHT_MIN_FONT_SIZE, fontSize - 0.5);
+    }
 
     return {
       width,
-      height: Math.max(Math.min(preferredHeight, availableHeight), requiredHeight),
+      height: Math.min(availableHeight, Math.max(Math.min(preferredHeight, availableHeight), requiredHeight)),
       fontSize,
       lineHeight,
     };
@@ -91,16 +194,13 @@ function getSpotlightNoteSize(message: string, availableWidth: number, available
     return pickSize(
       explicitLineCount > 4 ? 28 : 31,
       explicitLineCount > 4 ? 1.42 : 1.55,
-      18,
       880,
     );
   }
 
-  if (length < 180) {
-    return pickSize(explicitLineCount > 7 ? 21 : 24, explicitLineCount > 7 ? 1.34 : 1.45, 34, 940);
-  }
+  if (length < 180) return pickSize(explicitLineCount > 7 ? 21 : 24, explicitLineCount > 7 ? 1.34 : 1.45, 940);
 
-  return pickSize(length > 260 || explicitLineCount > 10 ? 17 : 20, 1.34, 38, 980);
+  return pickSize(length > 260 || explicitLineCount > 10 ? 17 : 20, 1.34, 980);
 }
 
 function seededRand(seed: number): number {
@@ -156,10 +256,7 @@ export function DisplayPage({ messages, loading, onVerifyAdmin, onReset, onDelet
   const [resetting, setResetting] = useState(false);
   const [resetDone, setResetDone] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [viewport, setViewport] = useState({
-    width: typeof window === "undefined" ? 1024 : window.innerWidth,
-    height: typeof window === "undefined" ? 768 : window.innerHeight,
-  });
+  const [viewport, setViewport] = useState(getViewportMetrics);
 
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef({ x: 0, y: 0, ox: 0, oy: 0 });
@@ -493,11 +590,19 @@ export function DisplayPage({ messages, loading, onVerifyAdmin, onReset, onDelet
 
   useEffect(() => {
     const handleResize = () => {
-      setViewport({ width: window.innerWidth, height: window.innerHeight });
+      setViewport(getViewportMetrics());
     };
 
     window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    window.visualViewport?.addEventListener("resize", handleResize);
+    window.visualViewport?.addEventListener("scroll", handleResize);
+    document.fonts?.ready.then(handleResize).catch(() => undefined);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.visualViewport?.removeEventListener("resize", handleResize);
+      window.visualViewport?.removeEventListener("scroll", handleResize);
+    };
   }, []);
 
   useEffect(() => {
@@ -512,8 +617,19 @@ export function DisplayPage({ messages, loading, onVerifyAdmin, onReset, onDelet
     ? ((spotlightIndex % messages.length) + messages.length) % messages.length
     : 0;
   const spotlightMessage = hasMessages ? messages[currentSpotlightIndex] : null;
-  const spotlightAvailableWidth = Math.max(280, viewport.width - 48);
-  const spotlightAvailableHeight = Math.max(320, viewport.height - 224);
+  const spotlightAvailableWidth = Math.max(
+    280,
+    viewport.width - SPOTLIGHT_HORIZONTAL_PADDING - viewport.safeArea.left - viewport.safeArea.right,
+  );
+  const spotlightAvailableHeight = Math.max(
+    240,
+    viewport.height
+      - SPOTLIGHT_TOP_OFFSET
+      - SPOTLIGHT_BOTTOM_OFFSET
+      - SPOTLIGHT_VERTICAL_GUTTER
+      - viewport.safeArea.top
+      - viewport.safeArea.bottom,
+  );
   const spotlightSize = spotlightMessage
     ? getSpotlightNoteSize(
         spotlightMessage.message,
@@ -1053,6 +1169,8 @@ export function DisplayPage({ messages, loading, onVerifyAdmin, onReset, onDelet
               whileTap={{ scale: 0.97 }}
               className="absolute top-5 right-5 px-5 py-2.5 rounded-full text-sm"
               style={{
+                top: "calc(20px + env(safe-area-inset-top, 0px))",
+                right: "calc(20px + env(safe-area-inset-right, 0px))",
                 background: "rgba(255, 255, 255, 0.12)",
                 color: "#F5E6D0",
                 border: "1px solid rgba(255, 255, 255, 0.22)",
@@ -1065,8 +1183,10 @@ export function DisplayPage({ messages, loading, onVerifyAdmin, onReset, onDelet
             <div
               className="absolute left-0 right-0 overflow-visible px-6"
               style={{
-                top: 72,
-                bottom: 132,
+                top: `calc(${SPOTLIGHT_TOP_OFFSET}px + env(safe-area-inset-top, 0px))`,
+                bottom: `calc(${SPOTLIGHT_BOTTOM_OFFSET}px + env(safe-area-inset-bottom, 0px))`,
+                paddingLeft: `calc(24px + env(safe-area-inset-left, 0px))`,
+                paddingRight: `calc(24px + env(safe-area-inset-right, 0px))`,
               }}
             >
               <div className="h-full flex items-center justify-center">
@@ -1141,7 +1261,10 @@ export function DisplayPage({ messages, loading, onVerifyAdmin, onReset, onDelet
               </div>
             </div>
 
-            <div className="absolute bottom-8 left-1/2 flex -translate-x-1/2 flex-wrap items-center justify-center gap-3 px-5">
+            <div
+              className="absolute left-1/2 flex -translate-x-1/2 flex-wrap items-center justify-center gap-3 px-5"
+              style={{ bottom: "calc(32px + env(safe-area-inset-bottom, 0px))" }}
+            >
               <motion.button
                 onClick={prevSpotlight}
                 disabled={!hasMessages}
